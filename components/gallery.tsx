@@ -1,6 +1,5 @@
-import Image from 'next/image'
-import { ShoppingBag } from 'lucide-react'
 import type { Artwork } from '@/lib/artworks'
+import { ArtworkCard } from '@/components/artwork-card'
 import { Pokeball } from '@/components/pokeball'
 
 export function Gallery({ artworks }: { artworks: Artwork[] }) {
@@ -19,40 +18,7 @@ export function Gallery({ artworks }: { artworks: Artwork[] }) {
           <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {artworks.map((art, i) => (
               <li key={art.id}>
-                <article className="group flex h-full flex-col rounded-2xl border-4 border-ink bg-poke-yellow p-3 shadow-[6px_6px_0_var(--color-ink)] transition-transform hover:-translate-y-1">
-                  <div className="flex items-center justify-between px-1 pb-2">
-                    <h3 className="truncate font-display text-base text-ink">{art.title}</h3>
-                    <span className="shrink-0 text-xs font-bold text-ink/70">
-                      No. {String(artworks.length - i).padStart(3, '0')}
-                    </span>
-                  </div>
-                  <div className="relative aspect-square overflow-hidden rounded-lg border-4 border-ink bg-cream">
-                    <Image
-                      src={art.imageUrl}
-                      alt={art.title}
-                      fill
-                      sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  </div>
-                  <div className="flex flex-1 flex-col gap-3 px-1 pt-3">
-                    {art.description ? (
-                      <p className="text-sm leading-relaxed text-ink/80">{art.description}</p>
-                    ) : null}
-                    {art.shopUrl ? (
-                      <a
-                        href={art.shopUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-auto inline-flex items-center justify-center gap-2 rounded-full border-4 border-ink bg-poke-red px-4 py-2 text-sm font-bold text-cream transition-colors hover:bg-poke-red/90"
-                      >
-                        <ShoppingBag className="size-4" aria-hidden="true" />
-                        Buy this print
-                        <span className="sr-only">(opens Shopify in a new tab)</span>
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
+                <ArtworkCard art={art} number={artworks.length - i} />
               </li>
             ))}
           </ul>
