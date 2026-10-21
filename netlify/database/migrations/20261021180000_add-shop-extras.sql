@@ -1,0 +1,22 @@
+ALTER TABLE shop_orders ADD COLUMN phone text NOT NULL DEFAULT '';
+ALTER TABLE shop_orders ADD COLUMN discount integer NOT NULL DEFAULT 0 CHECK (discount >= 0 AND discount <= subtotal);
+ALTER TABLE shop_orders ADD COLUMN discount_label text NOT NULL DEFAULT '';
+ALTER TABLE shop_orders ADD COLUMN coupon_code text NOT NULL DEFAULT '';
+ALTER TABLE shop_orders ADD COLUMN custom_details jsonb;
+ALTER TABLE shop_orders DROP CONSTRAINT shop_orders_final_total_check;
+ALTER TABLE shop_orders ADD CONSTRAINT shop_orders_final_total_check CHECK (final_total >= 0);
+CREATE TABLE shop_coupons (
+ id uuid PRIMARY KEY, code text NOT NULL UNIQUE CHECK (code = upper(code)), kind text NOT NULL CHECK (kind IN ('percent','fixed')),
+ amount integer NOT NULL CHECK (amount > 0 AND (kind != 'percent' OR amount <= 100)), minimum integer NOT NULL DEFAULT 0 CHECK (minimum >= 0),
+ expires_at timestamptz, active boolean NOT NULL DEFAULT true
+);
+CREATE TABLE shop_messages (
+ id uuid PRIMARY KEY, request_id uuid NOT NULL UNIQUE, name text NOT NULL, email text NOT NULL, phone text NOT NULL DEFAULT '',
+ message text NOT NULL, resolved boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE shop_subscribers (
+ id uuid PRIMARY KEY, email text NOT NULL UNIQUE, consent_text text NOT NULL, active boolean NOT NULL DEFAULT true,
+ created_at timestamptz NOT NULL DEFAULT now(), consent_at timestamptz NOT NULL DEFAULT now()
+);
+
+UPDATE shop_settings SET data = '{"heroImage": "/artworks/scyther-lWQ0foeiGwRy5hvTppqIaSfUmw6HqS.webp", "heroAlt": "Featured Pok\u00e9mon artwork", "customHeroImage": "/artworks/dragonite-Sn7h0GV1MXBn84XEEQX3qfq5abhEFS.webp", "customBase": 4000, "customColor": 2000, "customOptions": [{"id": "print-0", "label": "Art print", "format": "print", "size": "4 x 4", "surcharge": 0, "framePrice": 500, "active": true}, {"id": "print-1", "label": "Art print", "format": "print", "size": "4 x 6", "surcharge": 0, "framePrice": 500, "active": true}, {"id": "print-2", "label": "Art print", "format": "print", "size": "5 x 7", "surcharge": 0, "framePrice": 500, "active": true}, {"id": "print-3", "label": "Art print", "format": "print", "size": "8 x 10", "surcharge": 0, "framePrice": 500, "active": true}, {"id": "print-4", "label": "Art print", "format": "print", "size": "11 x 14", "surcharge": 0, "framePrice": 1000, "active": true}, {"id": "print-5", "label": "Art print", "format": "print", "size": "12 x 12", "surcharge": 0, "framePrice": 1000, "active": true}, {"id": "poster-0", "label": "Poster", "format": "poster", "size": "18 x 24", "surcharge": 0, "framePrice": 1500, "active": true}, {"id": "poster-1", "label": "Poster", "format": "poster", "size": "20 x 30", "surcharge": 0, "framePrice": 2500, "active": true}, {"id": "canvas-0", "label": "Canvas", "format": "canvas", "size": "12 x 20", "surcharge": 3999, "framePrice": null, "active": true}, {"id": "magnet-0", "label": "Magnet", "format": "magnet", "size": "4 x 4", "surcharge": 650, "framePrice": null, "active": true}, {"id": "magnet-1", "label": "Magnet", "format": "magnet", "size": "4 x 6", "surcharge": 750, "framePrice": null, "active": true}, {"id": "magnet-2", "label": "Magnet", "format": "magnet", "size": "5 x 7", "surcharge": 850, "framePrice": null, "active": true}], "bundles": {"enabled": true, "categoryId": "prints", "smallSize": "4 x 4", "largeSize": "4 x 6", "smallPair": 600, "largePair": 875, "mixedPair": 700}, "policies": [{"id": "8b206dc6-6260-40a0-99f1-ad99707d5c54", "title": "Turnaround time", "body": "", "published": false}, {"id": "ebb7ed9d-35b1-47b9-ba9b-00d1e8072e19", "title": "Packaging", "body": "", "published": false}, {"id": "22c81ec7-d558-41bc-888e-62dd40f3dd76", "title": "Where we ship", "body": "", "published": false}, {"id": "25c7e95f-bc98-4dbd-babc-a6e512b3751f", "title": "Shipping & returns", "body": "", "published": false}], "faqs": [{"id": "413c8285-8610-4426-b016-b59923f154ac", "question": "What paper do you use?", "answer": "", "published": false}, {"id": "9b6c8d16-092a-40e4-a975-d5b7b5446e69", "question": "What is the print quality like?", "answer": "", "published": false}, {"id": "7c4b1367-b73f-4ed0-8ef9-4f0e394d7404", "question": "Are frames included?", "answer": "", "published": false}], "socials": [{"id": "287d289d-4190-4969-87be-e5bfb792a89e", "label": "Instagram", "url": "", "active": false}, {"id": "084d8d26-f2cc-498f-bbc7-43fb3db9c750", "label": "TikTok", "url": "", "active": false}], "reviews": []}'::jsonb || data WHERE id=1;
