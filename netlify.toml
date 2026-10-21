@@ -1,0 +1,5 @@
+[build]
+  command = "pnpm run build"
+  publish = ".next"
+
+# Netlify automatically provides its Next.js adapter for routing and rendering.
