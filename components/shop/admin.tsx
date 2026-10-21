@@ -9,8 +9,15 @@ import {
   acceptInvite,
   updateUser,
   requestPasswordRecovery,
+  refreshSession,
 } from "@netlify/identity";
-import { api, money, statuses, digitalDeliveryNote } from "@/lib/commerce";
+import {
+  api,
+  ApiError,
+  money,
+  statuses,
+  digitalDeliveryNote,
+} from "@/lib/commerce";
 import type {
   Catalog,
   Product,
@@ -653,6 +660,7 @@ function OrderEditor({
 export default function Admin() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [deniedEmail, setDeniedEmail] = useState<string | null>(null);
   const [invite, setInvite] = useState<string | null>(null);
   const [reset, setReset] = useState(false);
   const [data, setData] = useState<Catalog | null>(null);
@@ -668,9 +676,20 @@ export default function Admin() {
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState("");
   async function load() {
-    const result = await api<Catalog>("admin");
-    setData(result);
-    setAuthenticated(true);
+    try {
+      const result = await api<Catalog>("admin");
+      setDeniedEmail(null);
+      setData(result);
+      setAuthenticated(true);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        const user = await getUser();
+        setDeniedEmail(user?.email || "your Identity account");
+        setAuthenticated(false);
+        setData(null);
+      }
+      throw e;
+    }
   }
   useEffect(() => {
     void (async () => {
@@ -799,6 +818,53 @@ export default function Admin() {
         <p role="status">Checking admin access…</p>
       </main>
     );
+  if (deniedEmail)
+    return (
+      <main className="shop-admin">
+        <a href="/">← Back to the shop</a>
+        <div className="shop-login shop-panel shop-form">
+          <h1>Admin access needed</h1>
+          <p>
+            You are signed in as {deniedEmail}, but this account does not
+            currently have admin access.
+          </p>
+          <p>
+            In this site’s Netlify dashboard, open Identity, select this email
+            address, add the exact role <strong>admin</strong> under Roles, and
+            save. Then refresh permissions below.
+          </p>
+          {feedback}
+          <button
+            className="shop-button"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                await refreshSession();
+                await load();
+              }, "Admin access confirmed.").catch(() => {})
+            }
+          >
+            {busy ? "Checking permissions…" : "Refresh admin permissions"}
+          </button>
+          <button
+            className="shop-button shop-secondary"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                await logout();
+                setDeniedEmail(null);
+                setAuthenticated(false);
+                setData(null);
+              }, "Signed out. Sign in with the email that has the admin role.").catch(
+                () => {},
+              )
+            }
+          >
+            Sign out / use another account
+          </button>
+        </div>
+      </main>
+    );
   if (!authenticated)
     return (
       <main className="shop-admin">
@@ -817,7 +883,7 @@ export default function Admin() {
                   name="email"
                   required
                   autoComplete="username"
-                  defaultValue="admin@evileevee.com"
+                  placeholder="Your Identity email"
                 />
               </label>
             )}
@@ -874,9 +940,9 @@ export default function Admin() {
             </form>
           )}
           <p className="shop-muted" style={{ marginTop: "1rem" }}>
-            Admin access is invitation only. The site owner invites
-            admin@evileevee.com through Netlify Identity and assigns the admin
-            role. No public signup is needed.
+            Use the email address you accepted your Netlify Identity invitation
+            with. Admin access requires the admin role on that same account in
+            this site’s Identity settings.
           </p>
         </div>
       </main>

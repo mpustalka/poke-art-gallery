@@ -261,6 +261,14 @@ export const money = (cents: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
     cents / 100,
   );
+export class ApiError extends Error {
+  public status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch("/api/shop/" + path, {
     ...options,
@@ -275,6 +283,7 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const data = await response.json().catch(() => ({
     error: "The server could not complete the request. Please try again.",
   }));
-  if (!response.ok) throw new Error(data.error || "Request failed");
+  if (!response.ok)
+    throw new ApiError(data.error || "Request failed", response.status);
   return data as T;
 }
