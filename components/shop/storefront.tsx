@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Pokeball, ScrollTop, ShippingEstimator } from "./order-tools";
 import { useCatalog } from "./catalog";
 import ProductDialog from "./product-dialog";
 import { ContactForm } from "./community";
@@ -249,8 +250,13 @@ function RequestForm({
         Preferred payment method
         <select name="payment_method" defaultValue="undecided">
           <option value="undecided">Decide after confirmation</option>
-          <option value="cashapp">Cash App</option>
-          <option value="paypal">PayPal</option>
+          {settings.paymentMethods
+            .filter((m) => m.active)
+            .map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
         </select>
       </label>
       <div className="shop-trap" aria-hidden="true">
@@ -297,6 +303,8 @@ export default function Storefront({
     } | null>(null),
     [couponError, setCouponError] = useState(""),
     [checkingCoupon, setCheckingCoupon] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartHovered, setCartHovered] = useState(false);
   const [cartReady, setCartReady] = useState(false);
   useEffect(() => {
     try {
@@ -354,7 +362,7 @@ export default function Storefront({
           )
         : [...current, item];
     });
-    setNotice("Added to your order. Open Your order to review and checkout.");
+    setNotice("Added to your order. Open My Orders to review and checkout.");
   }
   if (!data)
     return (
@@ -409,6 +417,72 @@ export default function Storefront({
   const hasDigital = priced.some((i) => i.delivery === "digital");
   return (
     <>
+      <ScrollTop />
+      {!checkoutOnly && priced.length > 0 && (
+        <aside
+          className="shop-mini-cart"
+          onMouseEnter={() => setCartHovered(true)}
+          onMouseLeave={() => setCartHovered(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setCartOpen(false);
+              setCartHovered(false);
+            }
+          }}
+        >
+          <button
+            type="button"
+            className="shop-button shop-cart-toggle"
+            aria-expanded={cartOpen || cartHovered}
+            aria-controls="mini-cart-items"
+            onClick={() => setCartOpen(!cartOpen)}
+          >
+            <Pokeball /> My Orders ({priced.reduce((n, i) => n + i.quantity, 0)}
+            ) <span>{money(quote.total)}</span>
+          </button>
+          {(cartOpen || cartHovered) && (
+            <div id="mini-cart-items" className="shop-mini-cart-content">
+              <h3>Your Pokémon picks</h3>
+              <ul>
+                {priced.map((i) => (
+                  <li key={i.productId + i.variantId}>
+                    <img src={i.image} alt="" />
+                    <div>
+                      <strong>{i.title}</strong>
+                      <small>
+                        {i.size} × {i.quantity}
+                      </small>
+                      <span>{money(i.price * i.quantity)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="shop-link-button"
+                      aria-label={`Remove ${i.title}, ${i.size}`}
+                      onClick={() =>
+                        setCart(
+                          cart.filter(
+                            (c) =>
+                              c.productId !== i.productId ||
+                              c.variantId !== i.variantId,
+                          ),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="shop-subtotal">
+                Artwork total <strong>{money(quote.total)}</strong>
+              </p>
+              <a className="shop-button" href={orderHref}>
+                Review order & checkout
+              </a>
+            </div>
+          )}
+        </aside>
+      )}
       {!checkoutOnly && (
         <>
           <section id="gallery" className="shop-section">
@@ -457,9 +531,6 @@ export default function Storefront({
               )}
               <div className="shop-row shop-between shop-gallery-tools">
                 <p role="status">{notice}</p>
-                <a className="shop-button shop-secondary" href={orderHref}>
-                  Your order ({cart.reduce((n, i) => n + i.quantity, 0)})
-                </a>
               </div>
               {products.length ? (
                 <div className="shop-grid">
@@ -514,8 +585,8 @@ export default function Storefront({
               <span className="shop-eyebrow">Ready to catch one?</span>
               <h2>Your Order</h2>
               <p>
-                Pay with Cash App or PayPal after your order and final total are
-                confirmed.
+                Choose an available payment method after your order and final
+                total are confirmed.
               </p>
             </div>
             <div className="shop-checkout">
@@ -677,6 +748,12 @@ export default function Storefront({
                 <p className="shop-subtotal">
                   After discounts <strong>{money(quote.total)}</strong>
                 </p>
+                <ShippingEstimator
+                  key={JSON.stringify(cart)}
+                  items={priced}
+                  subtotal={subtotal}
+                  total={quote.total}
+                />
                 <p className="shop-muted">
                   {digitalOnly
                     ? "Email delivery only. No shipping charge. Any applicable tax is confirmed before payment."

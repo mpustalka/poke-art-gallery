@@ -65,7 +65,9 @@ test("gallery tabs, magnets, cart, order receipt, and custom request work on des
     .selectOption({ label: "4 x 6 — $7.50" });
   await card.getByRole("button", { name: "Add to order" }).click();
   await expect(page.locator("#order")).toHaveCount(0);
-  await page.getByRole("link", { name: /Your order \(/ }).click();
+  await expect(page.getByRole("button", { name: /My Orders/ })).toBeVisible();
+  await page.getByRole("button", { name: /My Orders/ }).click();
+  await page.getByRole("link", { name: "Review order & checkout" }).click();
   await expect(page).toHaveURL(/\/order/);
   const order = page.locator("#order");
   await order.getByRole("spinbutton").fill("2");
@@ -257,7 +259,9 @@ test("bundle preview, coupon response, contact and newsletter forms work", async
     .selectOption({ label: "4 x 6 — $5.00" });
   await cards.nth(1).getByRole("button", { name: "Add to order" }).click();
   await expect(page.locator("#order")).toHaveCount(0);
-  await page.getByRole("link", { name: /Your order \(/ }).click();
+  await expect(page.getByRole("button", { name: /My Orders/ })).toBeVisible();
+  await page.getByRole("button", { name: /My Orders/ }).click();
+  await page.getByRole("link", { name: "Review order & checkout" }).click();
   await expect(page).toHaveURL(/\/order/);
   const order = page.locator("#order");
   await expect(order.locator(".shop-subtotal").last()).toContainText("$7.00");
@@ -364,7 +368,9 @@ test("digital checkout preserves picks across pages and handles mixed delivery",
     .first()
     .getByRole("button", { name: "Add to order" })
     .click();
-  await page.getByRole("link", { name: /Your order \(/ }).click();
+  await expect(page.getByRole("button", { name: /My Orders/ })).toBeVisible();
+  await page.getByRole("button", { name: /My Orders/ }).click();
+  await page.getByRole("link", { name: "Review order & checkout" }).click();
   await expect(page.locator(".shop-subtotal").last()).toContainText("$2.50");
   await expect(
     page.getByLabel("Delivery address or pickup request"),
@@ -383,7 +389,9 @@ test("digital checkout preserves picks across pages and handles mixed delivery",
     .nth(1)
     .getByRole("button", { name: "Add to order" })
     .click();
-  await page.getByRole("link", { name: /Your order \(/ }).click();
+  await expect(page.getByRole("button", { name: /My Orders/ })).toBeVisible();
+  await page.getByRole("button", { name: /My Orders/ }).click();
+  await page.getByRole("link", { name: "Review order & checkout" }).click();
   await expect(
     page.getByLabel("Delivery address or pickup request"),
   ).toBeVisible();
@@ -524,4 +532,73 @@ test("Pokémon poll votes, refreshes results, shows the winner banner and fits m
   });
   await expect(page.locator(".poll-announcement")).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("floating cart hides when empty and checkout shows USPS estimates with active payments", async ({
+  page,
+}) => {
+  const settings = {
+    ...catalog.settings,
+    paymentMethods: [
+      {
+        id: "venmo-shop",
+        name: "Shop Venmo",
+        type: "venmo",
+        value: "@shop",
+        active: true,
+      },
+      {
+        id: "zelle-shop",
+        name: "Shop Zelle",
+        type: "zelle",
+        value: "shop@example.org",
+        active: false,
+      },
+    ],
+  };
+  await page.route("**/api/shop/catalog", (route) =>
+    route.fulfill({ json: { ...catalog, settings } }),
+  );
+  await page.route("**/api/shop/shipping", (route) =>
+    route.fulfill({
+      json: { amount: 437, service: "USPS Ground Advantage", weightOz: 2 },
+    }),
+  );
+  await page.goto("http://localhost:8889/");
+  await expect(page.getByRole("button", { name: /My Orders/ })).toHaveCount(0);
+  await page
+    .locator(".shop-product")
+    .first()
+    .getByRole("button", { name: "Add to order", exact: true })
+    .click();
+  await page.getByRole("button", { name: /My Orders/ }).hover();
+  await expect(page.locator("#mini-cart-items")).toBeVisible();
+  await page
+    .locator("#mini-cart-items")
+    .getByRole("button", { name: /Remove/ })
+    .click();
+  await expect(page.getByRole("button", { name: /My Orders/ })).toHaveCount(0);
+  await page
+    .locator(".shop-product")
+    .first()
+    .getByRole("button", { name: "Add to order", exact: true })
+    .click();
+  await page.getByRole("button", { name: /My Orders/ }).click();
+  await page.getByRole("link", { name: "Review order & checkout" }).click();
+  await expect(page.locator('select[name="payment_method"] option')).toHaveText(
+    ["Decide after confirmation", "Shop Venmo"],
+  );
+  await page.getByLabel("Destination ZIP code").fill("10001");
+  await page.getByRole("button", { name: "Estimate shipping" }).click();
+  await expect(page.locator(".shop-shipping")).toContainText("$4.37");
+  await page.getByRole("spinbutton").fill("2");
+  await expect(page.locator(".shop-shipping")).not.toContainText("$4.37");
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect(
+    page.getByRole("button", { name: "Scroll to top" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Scroll to top" }).click();
+  await expect(page.getByRole("button", { name: "Scroll to top" })).toHaveCount(
+    0,
+  );
 });

@@ -412,8 +412,13 @@ export default function CustomArtwork() {
                         <option value="undecided">
                           Decide after confirmation
                         </option>
-                        <option value="cashapp">Cash App</option>
-                        <option value="paypal">PayPal</option>
+                        {data.settings.paymentMethods
+                          .filter((m) => m.active)
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
                       </select>
                     </label>
                     <div className="shop-trap" aria-hidden="true">

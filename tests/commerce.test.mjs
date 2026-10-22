@@ -116,7 +116,7 @@ test("Postgres migrations preserve original artwork and seed all requested sizes
       email: "buyer@example.org",
       address: "Pickup requested",
       notes: "",
-      payment_method: "paypal",
+      payment_method: "cashapp",
       website: "",
       items: [
         {
@@ -270,7 +270,7 @@ test("payment confirmation requires an explicit final total", () => {
     orderUpdateSchema.safeParse({
       id: randomUUID(),
       status: "paid",
-      admin_notes: "Verified in PayPal",
+      admin_notes: "Verified in payment account",
       final_total: 2000,
     }).success,
     true,
@@ -279,22 +279,42 @@ test("payment confirmation requires an explicit final total", () => {
 test("product image and payment links reject executable or offsite destinations", () => {
   const settings = {
     contactEmail: "admin@evileevee.com",
-    cashapp: "$ArtShop",
-    paypal: "https://paypal.me/artshop",
+    paymentMethods: [
+      {
+        id: "cashapp",
+        name: "Cash App",
+        type: "cashapp",
+        value: "$ArtShop",
+        active: true,
+      },
+    ],
     paymentNote: "Wait for confirmation.",
     shippingNote: "Shipping confirmed by email.",
   };
   assert.equal(settingsSchema.safeParse(settings).success, true);
-  for (const paypal of [
+  for (const value of [
     "javascript:alert(1)",
-    "https://paypal.me.evil.example/pay",
-    "https://evil.example",
-    "https://user@paypal.me/",
+    "http://example.org/pay",
+    "data:text/html,hello",
   ])
     assert.equal(
-      settingsSchema.safeParse({ ...settings, paypal }).success,
+      settingsSchema.safeParse({
+        ...settings,
+        paymentMethods: [{ ...settings.paymentMethods[0], value }],
+      }).success,
       false,
     );
+  assert.equal(
+    orderSchema.safeParse({ ...input(), payment_method: "paypal" }).success,
+    false,
+  );
+  assert.equal(
+    settingsSchema.safeParse({
+      ...settings,
+      paymentMethods: [settings.paymentMethods[0], settings.paymentMethods[0]],
+    }).success,
+    false,
+  );
   const product = {
     id: randomUUID(),
     category_id: "prints",
@@ -393,8 +413,7 @@ test("coupons choose the better discount, enforce expiry/minimum, and cap at sub
 test("custom estimates charge base, color, frame and physical format and enforce delivery", () => {
   const settings = settingsSchema.parse({
     contactEmail: "admin@evileevee.com",
-    cashapp: "",
-    paypal: "",
+    paymentMethods: [],
     paymentNote: "Confirm before paying",
     shippingNote: "Confirmed by email",
   });

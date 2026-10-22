@@ -6,6 +6,7 @@ export const variantSchema = z.object({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
   label,
   delivery: z.enum(["physical", "digital"]).default("physical"),
+  weightOz: z.number().positive().max(1600).optional(),
   price: z.number().int().min(1).max(10000000),
 });
 export const variantsSchema = z
@@ -39,36 +40,42 @@ export const productSchema = z.object({
   active: z.boolean(),
   sort_order: z.number().int().min(0).max(1000),
 });
+export const paymentMethodSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+    .refine((id) => id !== "undecided" && id !== "paypal"),
+  name: label,
+  type: z.enum(["cashapp", "venmo", "zelle", "bank_transfer", "other"]),
+  value: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .refine(
+      (value) =>
+        !/^[a-z][a-z0-9+.-]*:/i.test(value) ||
+        /^https:\/\/[^\s]+$/i.test(value),
+      "Use a handle, payment instructions, or an HTTPS URL",
+    ),
+  active: z.boolean(),
+});
 export const settingsSchema = z.object({
   ...siteFields,
   contactEmail: z.email().max(254),
-  cashapp: z
+  paymentMethods: z
+    .array(paymentMethodSchema)
+    .max(20)
+    .default([])
+    .refine(
+      (methods) => new Set(methods.map((m) => m.id)).size === methods.length,
+      "Payment method IDs must be unique",
+    ),
+  shippingOriginZip: z
     .string()
     .trim()
-    .regex(/^(?:\$?[a-zA-Z0-9_]{1,30})?$/),
-  paypal: z
-    .string()
-    .trim()
-    .max(300)
-    .refine((s) => {
-      if (!s) return true;
-      try {
-        const u = new URL(s);
-        return (
-          u.protocol === "https:" &&
-          [
-            "paypal.me",
-            "www.paypal.me",
-            "paypal.com",
-            "www.paypal.com",
-          ].includes(u.hostname) &&
-          !u.username &&
-          !u.password
-        );
-      } catch {
-        return false;
-      }
-    }, "Use an https://paypal.me or https://paypal.com link"),
+    .regex(/^(?:[0-9]{5})?$/)
+    .default(""),
   paymentNote: z.string().trim().max(2000),
   shippingNote: z.string().trim().min(1).max(2000),
 });
@@ -99,7 +106,10 @@ export const orderSchema = z
     phone: z.string().trim().max(40).default(""),
     coupon_code: z.string().trim().toUpperCase().max(40).default(""),
     custom: customSchema.nullable().default(null),
-    payment_method: z.enum(["cashapp", "paypal", "undecided"]),
+    payment_method: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,64}$/)
+      .refine((v) => v !== "paypal"),
     website: z.string().max(0),
     items: cartSchema,
   })
@@ -192,6 +202,7 @@ export type OrderItem = {
   quantity: number;
   image: string;
   delivery?: "physical" | "digital";
+  weightOz?: number;
 };
 export type Order = {
   id: string;
@@ -240,11 +251,31 @@ export function priceOrder(
       categoryId: c.id,
       size: v.label,
       delivery: v.delivery || "physical",
+      weightOz: v.weightOz ?? estimatedWeight(v.label, c.id),
       price: v.price,
       quantity: i.quantity,
       image: p.images[0],
     };
   });
+}
+export function estimatedWeight(size: string, category: string) {
+  const dimensions = size.match(/\d+(?:\.\d+)?/g)?.map(Number) || [4, 6];
+  const area = (dimensions[0] || 4) * (dimensions[1] || 6);
+  return /frame|wood|canvas/.test(category)
+    ? Math.max(2, Math.ceil(area / 24) * 2)
+    : 2;
+}
+export function shippingSummary(items: OrderItem[], subtotal: number) {
+  const weightOz = items.reduce(
+    (sum, i) =>
+      sum +
+      (i.delivery === "digital"
+        ? 0
+        : (i.weightOz ?? estimatedWeight(i.size, i.categoryId || i.category)) *
+          i.quantity),
+    0,
+  );
+  return { weightOz, free: weightOz === 0 || subtotal > 2500 };
 }
 export function requiresShipping(items: OrderItem[]) {
   return items.some((i) => i.delivery !== "digital");
