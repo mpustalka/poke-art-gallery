@@ -1,3 +1,4 @@
+import { quoteShipping } from "../../lib/shipping.ts";
 import {
   readPoll,
   submitVote,
@@ -21,6 +22,7 @@ import {
 } from "../../lib/site.ts";
 import { ZodError } from "zod";
 import {
+  cartSchema,
   categorySchema,
   productSchema,
   settingsSchema,
@@ -100,6 +102,7 @@ async function catalog(admin = false): Promise<Catalog> {
     );
   const config = settingsSchema.parse(settings[0].data);
   if (!admin) {
+    config.paymentMethods = config.paymentMethods.filter((m) => m.active);
     config.policies = config.policies.filter((p) => p.published);
     config.faqs = config.faqs.filter((f) => f.published);
     config.socials = config.socials.filter((s) => s.active);
@@ -209,6 +212,17 @@ async function placeOrder(input: OrderInput, context: Context) {
     });
   }
   await limit(context);
+  const paymentSettings = (await catalog()).settings;
+  if (
+    input.payment_method !== "undecided" &&
+    !paymentSettings.paymentMethods.some(
+      (m) => m.id === input.payment_method && m.active,
+    )
+  )
+    throw new HttpError(
+      400,
+      "That payment method is unavailable. Choose another method.",
+    );
   const pricing = await calculate(input);
   if (input.kind === "standard")
     validatedPrice(() => validateDelivery(pricing.items, input.address));
@@ -266,6 +280,44 @@ export default async (req: Request, context: Context) => {
       return json(await catalog());
     if (path === "orders" && req.method === "POST")
       return await placeOrder(orderSchema.parse(await body(req)), context);
+    if (path === "shipping" && req.method === "POST") {
+      const raw = z
+        .object({ items: cartSchema, zip: z.string().regex(/^[0-9]{5}$/) })
+        .parse(await body(req));
+      await limit(context, "shipping", 60);
+      const data = await catalog();
+      const items = validatedPrice(() =>
+        priceOrder(
+          { items: raw.items } as OrderInput,
+          data.products,
+          data.categories,
+        ),
+      );
+      try {
+        return json(
+          await quoteShipping(
+            items,
+            items.reduce((n, i) => n + i.price * i.quantity, 0),
+            raw.zip,
+            data.settings.shippingOriginZip,
+            Netlify.env.get("SHIPPO_API_KEY") ||
+              Netlify.env.get("SHIPPO_API_TOKEN") ||
+              Netlify.env.get("SHIPPO_TOKEN") ||
+              Object.keys(Netlify.env.toObject()).find((name) =>
+                /^shippo_live_[a-f0-9]+$/i.test(name),
+              ) ||
+              Object.keys(Netlify.env.toObject()).find((name) =>
+                /^shippo_test_[a-f0-9]+$/i.test(name),
+              ),
+          ),
+        );
+      } catch {
+        throw new HttpError(
+          503,
+          "USPS estimates are unavailable for this destination. Shipping is confirmed by email before payment.",
+        );
+      }
+    }
     if (path === "quote" && req.method === "POST") {
       const raw = await body(req);
       const input = orderSchema.parse({

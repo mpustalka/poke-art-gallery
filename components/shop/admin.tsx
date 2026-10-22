@@ -90,6 +90,22 @@ function VariantEditor({
               <option value="digital">Digital email delivery</option>
             </select>
           </label>
+          <label>
+            Shipping weight (oz)
+            <input
+              type="number"
+              min="0.1"
+              max="1600"
+              step="0.1"
+              value={v.weightOz ?? ""}
+              placeholder="Auto estimate"
+              onChange={(e) =>
+                change(i, {
+                  weightOz: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+          </label>
           <button
             type="button"
             className="shop-button shop-secondary"
@@ -429,24 +445,114 @@ function SettingsEditor({
           onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })}
         />
       </label>
+      <fieldset>
+        <legend>Payment methods</legend>
+        {draft.paymentMethods.map((method, index) => {
+          const update = (patch: Partial<typeof method>) =>
+            setDraft({
+              ...draft,
+              paymentMethods: draft.paymentMethods.map((m, n) =>
+                n === index ? { ...m, ...patch } : m,
+              ),
+            });
+          return (
+            <div className="shop-panel shop-form" key={method.id}>
+              <label>
+                Method name
+                <input
+                  required
+                  maxLength={120}
+                  value={method.name}
+                  onChange={(e) => update({ name: e.target.value })}
+                />
+              </label>
+              <label>
+                Type
+                <select
+                  value={method.type}
+                  onChange={(e) =>
+                    update({ type: e.target.value as typeof method.type })
+                  }
+                >
+                  <option value="cashapp">Cash App</option>
+                  <option value="venmo">Venmo</option>
+                  <option value="zelle">Zelle</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                Handle, HTTPS URL, or payment instructions
+                <input
+                  required
+                  maxLength={500}
+                  value={method.value}
+                  onChange={(e) => update({ value: e.target.value })}
+                />
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={method.active}
+                  onChange={(e) => update({ active: e.target.checked })}
+                />{" "}
+                Active in checkout
+              </label>
+              <button
+                type="button"
+                className="shop-button shop-secondary"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    paymentMethods: draft.paymentMethods.filter(
+                      (m) => m.id !== method.id,
+                    ),
+                  })
+                }
+              >
+                Remove method
+              </button>
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="shop-button shop-secondary"
+          disabled={draft.paymentMethods.length >= 20}
+          onClick={() =>
+            setDraft({
+              ...draft,
+              paymentMethods: [
+                ...draft.paymentMethods,
+                {
+                  id: crypto.randomUUID(),
+                  name: "",
+                  type: "cashapp",
+                  value: "",
+                  active: true,
+                },
+              ],
+            })
+          }
+        >
+          Add payment method
+        </button>
+      </fieldset>
       <label>
-        Cash App cashtag (optional)
+        Shipping origin ZIP code
         <input
-          placeholder="$YourCashtag"
-          value={draft.cashapp}
-          maxLength={31}
-          onChange={(e) => setDraft({ ...draft, cashapp: e.target.value })}
+          value={draft.shippingOriginZip}
+          pattern="[0-9]{5}"
+          maxLength={5}
+          onChange={(e) =>
+            setDraft({ ...draft, shippingOriginZip: e.target.value })
+          }
         />
       </label>
-      <label>
-        PayPal payment link (optional)
-        <input
-          type="url"
-          placeholder="https://paypal.me/yourname"
-          value={draft.paypal}
-          onChange={(e) => setDraft({ ...draft, paypal: e.target.value })}
-        />
-      </label>
+      <p className="shop-muted">
+        Used for USPS estimates through Shippo. Physical artwork over $25 ships
+        free; digital artwork needs no shipping.
+      </p>
       <label>
         Payment instructions
         <textarea
@@ -515,13 +621,9 @@ function OrderEditor({
     setDraft({ ...draft, ...patch });
   }
   const digitalItems = saved.items.some((i) => i.delivery === "digital");
-  const paymentLinks = [
-    settings.cashapp
-      ? `Cash App: https://cash.app/$${settings.cashapp.replace(/^\$/, "")}`
-      : "",
-    settings.paypal ? `PayPal: ${settings.paypal}` : "",
-  ]
-    .filter(Boolean)
+  const paymentLinks = settings.paymentMethods
+    .filter((m) => m.active)
+    .map((m) => `${m.name}: ${m.value}`)
     .join("\n");
   const emailBody = `Hi ${saved.name},\n\nYour ${saved.kind === "custom" ? "custom artwork request" : "order"} ${saved.reference} is ${saved.status.replaceAll("_", " ")}.\n\n${
     saved.custom_details
@@ -553,7 +655,11 @@ function OrderEditor({
         <strong>{order.name}</strong>
         <p>
           <a href={`mailto:${order.email}`}>{order.email}</a> ·{" "}
-          {order.payment_method}
+          {settings.paymentMethods.find((m) => m.id === order.payment_method)
+            ?.name ||
+            (order.payment_method === "undecided"
+              ? "Decide after confirmation"
+              : "Previously selected method")}
         </p>
         <p>{order.phone}</p>
         <pre>{order.address}</pre>
@@ -638,8 +744,8 @@ function OrderEditor({
         />
       </label>
       <p className="shop-muted">
-        Mark paid only after checking your Cash App or PayPal account. A payment
-        preference does not confirm payment. Saving does not send an email.
+        Mark paid only after checking your payment account. A payment preference
+        does not confirm payment. Saving does not send an email.
       </p>
       <div className="shop-row">
         <button className="shop-button" disabled={busy}>

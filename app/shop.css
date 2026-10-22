@@ -1370,3 +1370,107 @@
     transition: none;
   }
 }
+
+/* Floating order tray and Pokéball navigation share the shop's toy-box palette. */
+.shop-mini-cart {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 40;
+  max-width: calc(100vw - 104px);
+}
+.shop-cart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow:
+    0 6px 0 #252538,
+    0 12px 28px #25253833;
+}
+.shop-cart-toggle span {
+  margin-left: 10px;
+}
+.shop-mini-cart-content {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  max-height: 65dvh;
+  overflow: auto;
+  padding: 20px;
+  background: #fff8df;
+  color: #252538;
+  border: 3px solid #252538;
+  border-radius: 18px;
+  box-shadow: 5px 6px 0 #252538;
+}
+.shop-mini-cart-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.shop-mini-cart-content li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #25253833;
+}
+.shop-mini-cart-content img {
+  width: 48px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 5px;
+}
+.shop-mini-cart-content li div {
+  flex: 1;
+}
+.shop-mini-cart-content small,
+.shop-mini-cart-content li span {
+  display: block;
+}
+.shop-scroll-top {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 58px;
+  height: 58px;
+  border: 3px solid #252538;
+  border-radius: 50%;
+  background: #ffcb05;
+  color: #252538;
+  box-shadow: 0 4px 0 #252538;
+  cursor: pointer;
+}
+.shop-scroll-top:hover {
+  transform: translateY(-3px);
+}
+.shop-scroll-top:focus-visible,
+.shop-cart-toggle:focus-visible {
+  outline: 3px solid #3b72b8;
+  outline-offset: 5px;
+}
+.shop-shipping {
+  margin: 22px 0;
+  padding-top: 18px;
+  border-top: 2px dashed currentColor;
+}
+@media (max-width: 560px) {
+  .shop-mini-cart {
+    left: 12px;
+    bottom: 20px;
+  }
+  .shop-cart-toggle {
+    font-size: 13px;
+    padding: 10px;
+  }
+  .shop-cart-toggle span {
+    margin-left: 0;
+  }
+}
