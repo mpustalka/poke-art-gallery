@@ -1,3 +1,11 @@
+import {
+  readPoll,
+  submitVote,
+  savePollSettings,
+  adjustPollEntry,
+  startPollRound,
+  PollError,
+} from "../../lib/poll-server.ts";
 import type { Config, Context } from "@netlify/functions";
 import { getDatabase } from "@netlify/database";
 import { getStore } from "@netlify/blobs";
@@ -249,6 +257,11 @@ export default async (req: Request, context: Context) => {
         },
       });
     }
+    if (path === "poll" && req.method === "GET") return json(await readPoll());
+    if (path === "poll/vote" && req.method === "POST") {
+      await limit(context, "poll", 30);
+      return json(await submitVote(await body(req)), 201);
+    }
     if (path === "catalog" && req.method === "GET")
       return json(await catalog());
     if (path === "orders" && req.method === "POST")
@@ -284,7 +297,15 @@ export default async (req: Request, context: Context) => {
         .sql`INSERT INTO shop_subscribers (id,email,consent_text) VALUES (${randomUUID()},${v.email},${"I agree to receive emails about new artwork and shop updates."}) ON CONFLICT (email) DO UPDATE SET active=true,consent_at=now()`;
       return json({ saved: true });
     }
-    await requireAdmin();
+    const adminUser = await requireAdmin();
+    if (path === "poll/admin" && req.method === "GET")
+      return json(await readPoll(true));
+    if (path === "poll/settings" && req.method === "PUT")
+      return json(await savePollSettings(await body(req)));
+    if (path === "poll/entry" && req.method === "PUT")
+      return json(await adjustPollEntry(await body(req), adminUser.id));
+    if (path === "poll/new-round" && req.method === "POST")
+      return json(await startPollRound(await body(req)));
     if (path === "session" && req.method === "GET")
       return json({ admin: true });
     if (path === "admin" && req.method === "GET")
@@ -399,7 +420,8 @@ export default async (req: Request, context: Context) => {
     }
     return json({ error: "Not found" }, 404);
   } catch (e) {
-    if (e instanceof HttpError) return json({ error: e.message }, e.status);
+    if (e instanceof HttpError || e instanceof PollError)
+      return json({ error: e.message }, e.status);
     if (e instanceof ZodError)
       return json(
         {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PollAdmin from "./poll-admin";
 import {
   login,
   logout,
@@ -980,6 +981,7 @@ export default function Admin() {
           "categories",
           "orders",
           "website",
+          "poll",
           "discounts",
           "messages",
           "subscribers",
@@ -1004,6 +1006,7 @@ export default function Admin() {
         ))}
       </nav>
       {feedback}
+      {tab === "poll" && <PollAdmin catalog={data} />}
       {tab === "products" && (
         <>
           <div className="shop-row shop-between" style={{ margin: "1.5rem 0" }}>
