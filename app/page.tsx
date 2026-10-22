@@ -1,5 +1,6 @@
 import { CatalogProvider, HeroImage } from "@/components/shop/catalog";
 import CommunitySections from "@/components/shop/community";
+import PollSection from "@/components/shop/poll";
 import Storefront from "@/components/shop/storefront";
 // Restored from the original published gallery; styles and assets are hosted locally.
 export default function Page() {
@@ -74,6 +75,12 @@ export default function Page() {
                 Sizes
               </a>
               <a
+                href="#poll"
+                className="rounded-full px-3 py-1.5 transition-colors hover:bg-ink/30"
+              >
+                Vote
+              </a>
+              <a
                 href="/custom-artwork"
                 className="rounded-full px-3 py-1.5 transition-colors hover:bg-ink/30"
               >
@@ -145,6 +152,7 @@ export default function Page() {
               </div>
             </div>
           </section>
+          <PollSection />
           <Storefront />
           <CommunitySections />
         </main>

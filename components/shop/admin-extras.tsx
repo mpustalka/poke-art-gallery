@@ -4,7 +4,7 @@ import { api, money } from "@/lib/commerce";
 import type { Catalog, Settings } from "@/lib/commerce";
 import type { Coupon } from "@/lib/site";
 
-function ImagePicker({
+export function ImagePicker({
   value,
   onChange,
   images,

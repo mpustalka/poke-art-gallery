@@ -3,6 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile, readdir } from "node:fs/promises";
 
 let catalog;
+let pollSettings;
 // Browser fixtures use the exact deploy migrations, isolated from the live database.
 test.beforeAll(async () => {
   const db = new PGlite();
@@ -21,6 +22,10 @@ test.beforeAll(async () => {
       "SELECT data FROM shop_settings WHERE id=1",
     );
     catalog = { categories, products, settings: settings[0].data };
+    const {
+      rows: [poll],
+    } = await db.query("SELECT data FROM shop_poll_settings WHERE id=1");
+    pollSettings = poll.data;
   } finally {
     await db.close();
   }
@@ -155,10 +160,11 @@ test("real admin APIs reject unauthenticated reads and writes and foreign origin
     page.getByRole("button", { name: "Sign in", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("Admin access is invitation only.", { exact: false }),
+    page.getByText("Admin access requires the admin role", { exact: false }),
   ).toBeVisible();
   for (const path of [
     "session",
+    "poll/admin",
     "admin",
     "orders",
     "coupons",
@@ -169,6 +175,8 @@ test("real admin APIs reject unauthenticated reads and writes and foreign origin
       (await request.get("http://localhost:8889/api/shop/" + path)).status(),
     ).toBe(401);
   for (const path of [
+    "poll/settings",
+    "poll/entry",
     "products",
     "categories",
     "settings",
@@ -185,6 +193,22 @@ test("real admin APIs reject unauthenticated reads and writes and foreign origin
         })
       ).status(),
     ).toBe(401);
+  expect(
+    (
+      await request.post("http://localhost:8889/api/shop/poll/new-round", {
+        headers: { Origin: "http://localhost:8889" },
+        data: { round: 1 },
+      })
+    ).status(),
+  ).toBe(401);
+  expect(
+    (
+      await request.post("http://localhost:8889/api/shop/poll/vote", {
+        headers: { Origin: "https://foreign.example" },
+        data: {},
+      })
+    ).status(),
+  ).toBe(403);
   expect(
     (
       await request.post("http://localhost:8889/api/shop/orders", {
@@ -393,4 +417,111 @@ test("digital checkout preserves picks across pages and handles mixed delivery",
   expect(submitted[0].items).toHaveLength(1);
   expect(submitted[0].items[0].variantId).toBe("digital-print");
   expect(submitted[0].items[0].quantity).toBe(2);
+});
+
+test("Pokémon poll votes, refreshes results, shows the winner banner and fits mobile", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  let voted = false;
+  let duplicate = false;
+  let shown = true;
+  const submissions = [];
+  await page.route("**/api/shop/catalog", (route) =>
+    route.fulfill({ json: catalog }),
+  );
+  await page.route("**/api/shop/poll", (route) =>
+    route.fulfill({
+      json: {
+        round: 1,
+        settings: {
+          ...pollSettings,
+          enabled: shown,
+          bannerEnabled: shown,
+          bannerWinner: "Dragonite",
+          bannerImage: catalog.products[0].images[0],
+        },
+        total: voted ? 43 : 42,
+        entries: [
+          { pokemon: "eevee", votes: voted ? 15 : 14 },
+          { pokemon: "pikachu", votes: 11 },
+          { pokemon: "gengar", votes: 8 },
+          { pokemon: "mew", votes: 5 },
+          { pokemon: "dragonite", votes: 3 },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/shop/poll/vote", async (route) => {
+    submissions.push(route.request().postDataJSON());
+    if (duplicate)
+      return route.fulfill({
+        status: 429,
+        json: { error: "This email can vote again in seven days." },
+      });
+    voted = true;
+    duplicate = true;
+    await route.fulfill({
+      status: 201,
+      json: { saved: true, nextVoteAt: "2026-10-29T12:00:00.000Z" },
+    });
+  });
+  await page.goto("http://localhost:8889/");
+  const poll = page.locator("#poll");
+  await expect(
+    poll.getByRole("heading", { name: "Who should I draw next?" }),
+  ).toBeVisible();
+  await expect(page.locator(".poll-announcement")).toContainText("Dragonite!");
+  expect(
+    await page
+      .locator(".poll-announcement")
+      .evaluate((el) => el.previousElementSibling?.tagName),
+  ).toBe("SECTION");
+  await expect(poll.locator(".poll-leaderboard li")).toHaveCount(5);
+  await expect(poll.locator(".poll-total")).toContainText("42 votes");
+  await poll.getByLabel("Your name", { exact: true }).fill("Mira Chen");
+  await poll
+    .getByLabel("Email address", { exact: true })
+    .fill("mira@example.com");
+  await poll.getByLabel("Pokémon name", { exact: true }).fill("Eevee");
+  await poll.getByRole("button", { name: "Cast my vote" }).click();
+  await expect(poll.getByRole("status")).toContainText("Vote caught!");
+  await expect(poll.locator(".poll-total")).toContainText("43 votes");
+  expect(submissions[0]).toMatchObject({
+    name: "Mira Chen",
+    email: "mira@example.com",
+    pokemon: "Eevee",
+  });
+  await poll.getByLabel("Your name", { exact: true }).fill("Mira Chen");
+  await poll
+    .getByLabel("Email address", { exact: true })
+    .fill("mira@example.com");
+  await poll.getByLabel("Pokémon name", { exact: true }).fill("Pikachu");
+  await poll.getByRole("button", { name: "Cast my vote" }).click();
+  await expect(poll.getByRole("alert")).toContainText("seven days");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await poll.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "/tmp/pokemon-poll-mobile.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await poll.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "/tmp/pokemon-poll-desktop.png",
+    fullPage: true,
+  });
+  // A changed server response appears on the next live refresh without navigation.
+  shown = false;
+  await expect(page.locator(".poll-console")).toHaveCount(0, {
+    timeout: 15000,
+  });
+  await expect(page.locator(".poll-announcement")).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
