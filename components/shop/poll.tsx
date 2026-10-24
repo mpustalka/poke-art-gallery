@@ -5,7 +5,6 @@ import {
   leaderboardPokemonEntries,
   pokemonLabel,
   pokemonNames,
-  pokemonSpriteUrl,
 } from "@/lib/poll";
 import type { PollData } from "@/lib/poll";
 
@@ -202,9 +201,10 @@ export default function PollSection() {
                 {leaderboard.length ? (
                   <>
                     {leaders.length > 1 && (
-                      <p className="poll-leader-tie">
-                        Tie at the top: {leaders.map((entry) => entry.label).join(" · ")}
-                      </p>
+                      <div className="poll-leader-tie" aria-live="polite">
+                        <span className="poll-leader-tie-label">Tie at the top</span>
+                        <strong>{leaders.map((entry) => entry.label).join(" · ")}</strong>
+                      </div>
                     )}
 
                     <ol className="poll-leaderboard" aria-label="Top five Pokémon">
@@ -224,17 +224,20 @@ export default function PollSection() {
                         return (
                           <li
                             key={entry.pokemon}
-                            className={index === 0 ? "poll-first" : ""}
+                            className={isLeader ? "poll-first" : ""}
                           >
                             <span className="poll-rank">
                               {String(index + 1).padStart(2, "0")}
                             </span>
-                            <img
-                              className={`poll-sprite ${isLeader ? "poll-sprite-leader" : ""}`}
-                              src={entry.sprite}
-                              alt={entry.label}
-                              loading="lazy"
-                            />
+                            <div className="poll-sprite-wrap">
+                              <img
+                                className={`poll-sprite ${isLeader ? "poll-sprite-leader" : ""}`}
+                                src={entry.sprite}
+                                alt={entry.label}
+                                loading="lazy"
+                              />
+                              {isLeader && <span className="poll-crown">1st</span>}
+                            </div>
                             <div className="poll-contender">
                               <div>
                                 <strong>{entry.label}</strong>
