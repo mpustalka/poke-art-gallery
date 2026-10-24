@@ -1,9 +1,11 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, Radio, Trophy, Vote } from "lucide-react";
 import { api } from "@/lib/commerce";
-import { pokemonLabel, pokemonNames } from "@/lib/poll";
+import {
+  leaderboardPokemonEntries,
+  pokemonLabel,
+  pokemonNames,
+} from "@/lib/poll";
 import type { PollData } from "@/lib/poll";
 
 export function PokemonSuggestions({ id }: { id: string }) {
@@ -23,10 +25,12 @@ export default function PollSection() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+
   useEffect(() => {
     let active = true;
     let running = false;
     const controller = new AbortController();
+
     async function load() {
       if (!active || running) return;
       running = true;
@@ -37,20 +41,25 @@ export default function PollSection() {
           setError("");
         }
       } catch (e) {
-        if (active && (e as Error).name !== "AbortError")
+        if (active && (e as Error).name !== "AbortError") {
           setError("Results are reconnecting. Please try again shortly.");
+        }
       } finally {
         running = false;
       }
     }
+
     void load();
     const timer = setInterval(() => {
       if (!document.hidden) void load();
     }, 10000);
+
     const onVisible = () => {
       if (!document.hidden) void load();
     };
+
     document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       active = false;
       clearInterval(timer);
@@ -87,7 +96,11 @@ export default function PollSection() {
         </div>
       </section>
     );
+
   const { settings: s } = data;
+  const leaderboard = leaderboardPokemonEntries(data.entries);
+  const leaders = leaderboard.filter((entry) => entry.votes === leaderboard[0]?.votes);
+
   return (
     <>
       {s.bannerEnabled && (
@@ -130,6 +143,7 @@ export default function PollSection() {
           </div>
         </section>
       )}
+
       {s.enabled && (
         <section
           id="poll"
@@ -144,6 +158,7 @@ export default function PollSection() {
                 Poll {String(data.round).padStart(2, "0")}
               </span>
             </div>
+
             <div className="poll-grid">
               <div className="poll-invite">
                 <span className="shop-eyebrow">
@@ -162,6 +177,7 @@ export default function PollSection() {
                   Make your pick <ArrowUpRight size={18} aria-hidden="true" />
                 </a>
               </div>
+
               <div className="poll-screen">
                 <div className="poll-results-heading">
                   <h3>
@@ -176,64 +192,81 @@ export default function PollSection() {
                         : "Voting closed"}
                   </span>
                 </div>
+
                 <p className="poll-total">
-                  {data.total.toLocaleString()}{" "}
-                  {data.total === 1 ? "vote" : "votes"} on the board{" "}
+                  {data.total.toLocaleString()} {data.total === 1 ? "vote" : "votes"} on the board {" "}
                   <span>• Refreshes every 10s</span>
                 </p>
-                {data.entries.length ? (
-                  <ol
-                    className="poll-leaderboard"
-                    aria-label="Top five Pokémon"
-                  >
-                    {data.entries.map((entry, index) => {
-                      const percent = data.total
-                        ? Math.round((entry.votes / data.total) * 100)
-                        : 0;
-                      const tied =
-                        entry.votes > 0 &&
-                        data.entries.some(
-                          (other) =>
-                            other.pokemon !== entry.pokemon &&
-                            other.votes === entry.votes,
-                        );
-                      return (
-                        <li
-                          key={entry.pokemon}
-                          className={index === 0 ? "poll-first" : ""}
-                        >
-                          <span className="poll-rank">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <div className="poll-contender">
-                            <div>
-                              <strong>{pokemonLabel(entry.pokemon)}</strong>
-                              <small>
-                                {entry.votes.toLocaleString()}{" "}
-                                {entry.votes === 1 ? "vote" : "votes"}
-                                {tied ? " · tied" : ""}
-                              </small>
-                            </div>
-                            <div
-                              className="poll-track"
-                              role="meter"
-                              aria-label={`${pokemonLabel(entry.pokemon)} share of all votes`}
-                              aria-valuenow={percent}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            >
-                              <span
-                                style={{
-                                  transform: `scaleX(${percent / 100})`,
-                                }}
+
+                {leaderboard.length ? (
+                  <>
+                    {leaders.length > 1 && (
+                      <div className="poll-leader-tie" aria-live="polite">
+                        <span className="poll-leader-tie-label">Tie at the top</span>
+                        <strong>{leaders.map((entry) => entry.label).join(" · ")}</strong>
+                      </div>
+                    )}
+
+                    <ol className="poll-leaderboard" aria-label="Top five Pokémon">
+                      {leaderboard.map((entry, index) => {
+                        const percent = data.total
+                          ? Math.round((entry.votes / data.total) * 100)
+                          : 0;
+                        const tied =
+                          entry.votes > 0 &&
+                          data.entries.some(
+                            (other) =>
+                              other.pokemon !== entry.pokemon &&
+                              other.votes === entry.votes,
+                          );
+                        const isLeader = entry.votes === leaderboard[0]?.votes;
+
+                        return (
+                          <li
+                            key={entry.pokemon}
+                            className={isLeader ? "poll-first" : ""}
+                          >
+                            <span className="poll-rank">
+                              {String(index + 1).padStart(2, "0")}
+                            </span>
+                            <div className="poll-sprite-wrap">
+                              <img
+                                className={`poll-sprite ${isLeader ? "poll-sprite-leader" : ""}`}
+                                src={entry.sprite}
+                                alt={entry.label}
+                                loading="lazy"
                               />
+                              {isLeader && <span className="poll-crown">1st</span>}
                             </div>
-                          </div>
-                          <span className="poll-percent">{percent}%</span>
-                        </li>
-                      );
-                    })}
-                  </ol>
+                            <div className="poll-contender">
+                              <div>
+                                <strong>{entry.label}</strong>
+                                <small>
+                                  {entry.votes.toLocaleString()} {entry.votes === 1 ? "vote" : "votes"}
+                                  {tied ? " · tied" : ""}
+                                </small>
+                              </div>
+                              <div
+                                className="poll-track"
+                                role="meter"
+                                aria-label={`${entry.label} share of all votes`}
+                                aria-valuenow={percent}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                              >
+                                <span
+                                  style={{
+                                    transform: `scaleX(${percent / 100})`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <span className="poll-percent">{percent}%</span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </>
                 ) : (
                   <div className="poll-empty">
                     <Vote size={36} aria-hidden="true" />
@@ -241,10 +274,12 @@ export default function PollSection() {
                     <p>No votes yet. Your favourite could take the lead.</p>
                   </div>
                 )}
+
                 <p className="poll-footnote">
                   Any Pokémon can enter. Only the top five appear here. Ties
                   share a vote count.
                 </p>
+
                 {error && (
                   <p role="status" className="shop-error">
                     {error} Showing the last received results.
@@ -252,6 +287,7 @@ export default function PollSection() {
                 )}
               </div>
             </div>
+
             <div className="poll-vote-deck" id="cast-vote">
               <div>
                 <span className="poll-overline">Trainer’s choice</span>
@@ -262,6 +298,7 @@ export default function PollSection() {
                 </h3>
                 <p>No account needed. One vote per email every seven days.</p>
               </div>
+
               {s.open ? (
                 <form
                   className="shop-form poll-vote-form"
