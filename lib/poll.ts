@@ -2,6 +2,7 @@ import { z } from "zod";
 import species from "./pokemon.json" with { type: "json" };
 
 export const pokemonNames = species;
+
 export function pokemonLabel(name: string) {
   const special: Record<string, string> = {
     "nidoran-f": "Nidoran ♀",
@@ -19,6 +20,7 @@ export function pokemonLabel(name: string) {
     sirfetchd: "Sirfetch’d",
     flabebe: "Flabébé",
   };
+
   return (
     special[name] ||
     name
@@ -27,6 +29,7 @@ export function pokemonLabel(name: string) {
       .join(" ")
   );
 }
+
 function key(value: string) {
   return value
     .trim()
@@ -36,9 +39,29 @@ function key(value: string) {
     .normalize("NFD")
     .replace(/[^a-z0-9]/g, "");
 }
+
 export function canonicalPokemon(value: string) {
   return species.find((name) => key(name) === key(value));
 }
+
+export function pokemonSpriteUrl(name: string, kind: "home" | "3d" = "home") {
+  const match = canonicalPokemon(name) || name.trim();
+  const slug = match
+    .trim()
+    .toLowerCase()
+    .replace(/['.]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/:/g, "")
+    .replace(/♀/g, "f")
+    .replace(/♂/g, "m");
+
+  if (kind === "3d") {
+    return `https://projectpokemon.org/images/sprites-models/gen8/normal/${slug}.png`;
+  }
+
+  return `https://img.pokemondb.net/sprites/home/normal/${slug}.png`;
+}
+
 const pokemon = z
   .string()
   .trim()
@@ -46,6 +69,7 @@ const pokemon = z
   .max(80)
   .transform((value) => canonicalPokemon(value) || "")
   .refine(Boolean, "Choose a Pokémon species from the suggestions.");
+
 export const voteSchema = z.object({
   name: z.string().trim().min(2).max(100),
   email: z
@@ -57,6 +81,7 @@ export const voteSchema = z.object({
   pokemon,
   website: z.string().max(0).optional().default(""),
 });
+
 export const pollSettingsSchema = z.object({
   enabled: z.boolean(),
   open: z.boolean(),
@@ -73,21 +98,33 @@ export const pollSettingsSchema = z.object({
     ),
   bannerImageAlt: z.string().trim().max(180),
 });
+
 export const pollEntrySchema = z.object({
   round: z.number().int().min(1),
   pokemon,
   votes: z.number().int().min(0).max(1000000),
 });
+
 export type PollSettings = z.infer<typeof pollSettingsSchema>;
+
 export type PollEntry = {
   pokemon: string;
   votes: number;
   actual_votes?: number;
   adjustment?: number;
 };
+
 export type PollData = {
   settings: PollSettings;
   round: number;
   entries: PollEntry[];
   total: number;
 };
+
+export function leaderboardPokemonEntries(entries: PollEntry[]) {
+  return entries.slice(0, 5).map((entry) => ({
+    ...entry,
+    sprite: pokemonSpriteUrl(entry.pokemon),
+    label: pokemonLabel(entry.pokemon),
+  }));
+}
